@@ -1,0 +1,28 @@
+name: unifi-block-sync
+
+services:
+  unifi-block-sync:
+    image: ghcr.io/nulifyer/unifi-block-sync:latest
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      LOKI_URL: ${LOKI_URL}
+      LOKI_QUERY: ${LOKI_QUERY}
+      LOKI_USERNAME: ${LOKI_USERNAME:-}
+      LOKI_PASSWORD: ${LOKI_PASSWORD:-}
+      UNIFI_URL: ${UNIFI_URL}
+      UNIFI_API_KEY: ${UNIFI_API_KEY}
+      UNIFI_SITE_ID: ${UNIFI_SITE_ID}
+      UNIFI_LIST_ID: ${UNIFI_LIST_ID:-}
+      UNIFI_LIST_NAME: ${UNIFI_LIST_NAME:-Auto Blocked IPv4}
+      UNIFI_CA_FILE: ${UNIFI_CA_FILE:-}
+      BLOCK_THRESHOLD: ${BLOCK_THRESHOLD:-20}
+      POLL_INTERVAL: ${POLL_INTERVAL:-5m}
+      MAX_ENTRIES: ${MAX_ENTRIES:-1000}
+      ALLOW_CIDRS: ${ALLOW_CIDRS:-}
+      DRY_RUN: ${DRY_RUN:-true}
+      UNIFI_INSECURE_TLS: ${UNIFI_INSECURE_TLS:-false}
