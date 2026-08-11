@@ -1,8 +1,8 @@
 # UniFi Block Sync
 
-UniFi Block Sync periodically queries a Loki metric query for repeatedly blocked client IPs and appends qualifying public IPv4 addresses to a UniFi Network traffic matching list. It uses the local UniFi Network Integration API, so the controller does not need to be exposed to the internet.
+UniFi Block Sync periodically queries Loki for repeatedly blocked client IPs and reconciles a UniFi Network traffic matching list to the qualifying public IPv4 addresses. It uses the local UniFi Network Integration API, so the controller does not need to be exposed to the internet.
 
-The service is intentionally append-only. It preserves existing list entries and never removes an address automatically. Use a dedicated list such as `Auto Blocked IPv4` and reference it from the firewall rule alongside manually managed lists.
+The service fully manages the target list. Every successful write replaces its contents with the current desired set; stale, manual, subnet, range, and duplicate entries are removed. Use a dedicated list and do not maintain entries in it manually.
 
 ## Requirements
 
@@ -61,6 +61,8 @@ topk(100, sum by (client_ip) (count_over_time({job="goipabuseapi"} | json | even
 
 Grafana template variables such as `$__range` are unavailable to this service. Replace them with a fixed LogQL duration such as `[15m]`.
 
+The query window defines practical expiry. For example, with a `[30d]` query, an address is removed after it no longer has enough blocked events within the preceding 30 days. Loki query failures never alter the list.
+
 ## Configuration
 
 Create a `.env` file that is excluded from Git:
@@ -91,9 +93,9 @@ DRY_RUN=true
 | `UNIFI_LIST_NAME` | `Auto Blocked IPv4` | Exact list name used when no ID is set. |
 | `BLOCK_THRESHOLD` | `20` | Minimum count returned by Loki. |
 | `POLL_INTERVAL` | `5m` | Reconciliation interval. |
-| `MAX_ENTRIES` | `1000` | Hard safety limit for all list items. |
-| `ALLOW_CIDRS` | empty | Comma-separated addresses that must never be added. |
-| `DRY_RUN` | `true` | Logs candidates without writing to UniFi. |
+| `MAX_ENTRIES` | `1000` | Hard safety limit for the desired list. |
+| `ALLOW_CIDRS` | empty | Comma-separated addresses excluded from the managed list. |
+| `DRY_RUN` | `true` | Logs planned additions and removals without writing to UniFi. |
 | `UNIFI_CA_FILE` | empty | Mounted PEM CA bundle for the controller certificate. |
 | `UNIFI_INSECURE_TLS` | `false` | Disables TLS verification; diagnostic use only. |
 
@@ -107,7 +109,9 @@ Start in dry-run mode and inspect the logs:
 docker compose --env-file .env up
 ```
 
-After confirming the selected IPs and the target list, set `DRY_RUN=false`. The service reads the latest list before every update, preserves its current items, deduplicates candidates, and aborts at `MAX_ENTRIES`.
+After confirming all planned additions and removals, set `DRY_RUN=false`. The service reads the latest list before every update, deduplicates candidates, and replaces the list only when its desired contents differ.
+
+The UniFi API requires at least one list item. When no candidates qualify, the service writes the reserved documentation address `192.0.2.1` as a harmless sentinel and removes it when a real candidate qualifies.
 
 ## Build and test
 
