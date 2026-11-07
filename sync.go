@@ -59,12 +59,17 @@ func (s syncer) run(ctx context.Context) error {
 		return fmt.Errorf("list %q has type %q, want IPV4_ADDRESSES", list.Name, list.Type)
 	}
 
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Blocks > candidates[j].Blocks })
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Blocks != candidates[j].Blocks {
+			return candidates[i].Blocks > candidates[j].Blocks
+		}
+		return candidates[i].Address.Compare(candidates[j].Address) < 0
+	})
 	desired := make([]matchingItem, 0, len(candidates))
 	desiredAddresses := make(map[string]struct{}, len(candidates))
 	blocksByAddress := make(map[string]int, len(candidates))
 	for _, candidate := range candidates {
-		if allowed(candidate.Address, s.allowCIDRs) {
+		if candidate.Blocks < s.threshold || !isPublicIPv4(candidate.Address) || allowed(candidate.Address, s.allowCIDRs) {
 			continue
 		}
 		address := candidate.Address.String()

@@ -53,15 +53,15 @@ Install the controller's CA certificate on the host or mount it into the contain
 
 ## Loki query
 
-Copy the LogQL query from the Grafana panel, keeping the aggregation grouped by `client_ip`. A compatible query resembles:
+The built-in query returns every observed blocked source. Do not use a dashboard top-k ranking as the managed-list query. The default is:
 
 ```logql
-topk(100, sum by (client_ip) (count_over_time({job="goipabuseapi"} | json | event="auth_decision" | decision="blocked" [15m])))
+sum by (client_ip) (count_over_time({job="goipabuse"} | json | __error__="" | event="auth_decision" | decision="blocked" | keep client_ip [30d]))
 ```
 
 Grafana template variables such as `$__range` are unavailable to this service. Replace them with a fixed LogQL duration such as `[15m]`.
 
-The query window defines practical expiry. For example, with a `[30d]` query, an address is removed after it no longer has enough blocked events within the preceding 30 days. Loki query failures never alter the list.
+The query window defines practical expiry. For example, with a `[30d]` query, an address is removed after it no longer has enough blocked events within the preceding 30 days. Loki query failures, warnings, invalid counts and stale collection evidence never alter the list. Quiet periods longer than MAX_LOG_AGE conservatively defer expiry until fresh traffic is observed. Capacity overflow preserves the entire existing list rather than selecting a truncated subset. Tied counts use numeric IP order.
 
 ## Configuration
 
@@ -69,7 +69,7 @@ Create a `.env` file that is excluded from Git:
 
 ```dotenv
 LOKI_URL=http://loki:3100
-LOKI_QUERY=topk(100, sum by (client_ip) (count_over_time({job="goipabuseapi"} | json | event="auth_decision" | decision="blocked" [15m])))
+LOKI_QUERY=sum by (client_ip) (count_over_time({job="goipabuse"} | json | __error__="" | event="auth_decision" | decision="blocked" | keep client_ip [30d]))
 UNIFI_URL=https://unifi.example.lan
 UNIFI_API_KEY=replace-me
 UNIFI_SITE_ID=replace-with-site-uuid
@@ -84,7 +84,9 @@ DRY_RUN=true
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `LOKI_URL` | required | Loki base URL. |
-| `LOKI_QUERY` | required | Instant vector query with a `client_ip` label. |
+| `LOKI_QUERY` | all 30-day blocked sources | Optional override; must return every source, without top-k truncation. |
+| `LOKI_FRESHNESS_QUERY` | latest Traefik access timestamp within 2h | Collection evidence checked before changing the list. |
+| `MAX_LOG_AGE` | `2h` | Refuse changes when collection evidence is missing, stale or future-dated. |
 | `LOKI_USERNAME`, `LOKI_PASSWORD` | empty | Optional Loki basic authentication. |
 | `UNIFI_URL` | required | Local controller base URL. |
 | `UNIFI_API_KEY` | required | Network Integration API key. |

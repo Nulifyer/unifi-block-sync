@@ -13,6 +13,8 @@ import (
 type config struct {
 	LokiURL        string
 	LokiQuery      string
+	FreshnessQuery string
+	MaxLogAge      time.Duration
 	LokiUsername   string
 	LokiPassword   string
 	UniFiURL       string
@@ -33,7 +35,9 @@ type config struct {
 func loadConfig() (config, error) {
 	c := config{
 		LokiURL:        strings.TrimRight(os.Getenv("LOKI_URL"), "/"),
-		LokiQuery:      os.Getenv("LOKI_QUERY"),
+		LokiQuery:      envString("LOKI_QUERY", `sum by (client_ip) (count_over_time({job="goipabuse"} | json | __error__="" | event="auth_decision" | decision="blocked" | keep client_ip [30d]))`),
+		FreshnessQuery: envString("LOKI_FRESHNESS_QUERY", `max(max_over_time({job="traefik",log_type="access"} | label_format observed="{{ __timestamp__ | unixEpoch }}" | keep observed | unwrap observed [2h]))`),
+		MaxLogAge:      envDuration("MAX_LOG_AGE", 2*time.Hour),
 		LokiUsername:   os.Getenv("LOKI_USERNAME"),
 		LokiPassword:   os.Getenv("LOKI_PASSWORD"),
 		UniFiURL:       strings.TrimRight(os.Getenv("UNIFI_URL"), "/"),
@@ -58,7 +62,7 @@ func loadConfig() (config, error) {
 			return config{}, fmt.Errorf("%s is required", name)
 		}
 	}
-	if c.Threshold < 1 || c.MaxEntries < 1 || c.PollInterval <= 0 || c.RequestTimeout <= 0 {
+	if c.MaxLogAge <= 0 || c.Threshold < 1 || c.MaxEntries < 1 || c.PollInterval <= 0 || c.RequestTimeout <= 0 {
 		return config{}, errors.New("thresholds, limits, and durations must be positive")
 	}
 

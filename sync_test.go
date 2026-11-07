@@ -106,3 +106,37 @@ func TestIsPublicIPv4(t *testing.T) {
 		}
 	}
 }
+
+func TestMoreThanOneHundredQualifiersRemainStable(t *testing.T) {
+	source := make(fakeSource, 140)
+	for i := range source {
+		source[i] = candidate{Address: netip.AddrFrom4([4]byte{8, 10, 1, byte(i + 1)}), Blocks: 20}
+	}
+	store := &fakeStore{list: matchingList{Type: "IPV4_ADDRESSES"}}
+	worker := syncer{source: source, store: store, threshold: 20, maxEntries: 1000}
+	if err := worker.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.list.Items) != 140 {
+		t.Fatalf("lost qualifying addresses: %d", len(store.list.Items))
+	}
+	for i, j := 0, len(source)-1; i < j; i, j = i+1, j-1 {
+		source[i], source[j] = source[j], source[i]
+	}
+	if err := worker.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if store.updates != 1 {
+		t.Fatalf("identical membership was rewritten: %d", store.updates)
+	}
+}
+func TestCapacityFailurePreservesExistingList(t *testing.T) {
+	store := &fakeStore{list: matchingList{Type: "IPV4_ADDRESSES", Items: []matchingItem{{Type: "IP_ADDRESS", Value: "1.1.1.1"}}}}
+	worker := syncer{source: fakeSource{{Address: netip.MustParseAddr("8.8.8.8"), Blocks: 21}, {Address: netip.MustParseAddr("9.9.9.9"), Blocks: 21}}, store: store, threshold: 20, maxEntries: 1}
+	if err := worker.run(context.Background()); err == nil {
+		t.Fatal("capacity failure was ignored")
+	}
+	if store.updates != 0 || store.list.Items[0].Value != "1.1.1.1" {
+		t.Fatal("existing protection changed")
+	}
+}

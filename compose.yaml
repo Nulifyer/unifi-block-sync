@@ -11,7 +11,10 @@ services:
       - ALL
     environment:
       LOKI_URL: ${LOKI_URL}
-      LOKI_QUERY: ${LOKI_QUERY}
+      # LOKI_QUERY is optional; the built-in query returns all sources without topk.
+      LOKI_QUERY: ${LOKI_QUERY:-}
+      LOKI_FRESHNESS_QUERY: ${LOKI_FRESHNESS_QUERY:-}
+      MAX_LOG_AGE: ${MAX_LOG_AGE:-2h}
       LOKI_USERNAME: ${LOKI_USERNAME:-}
       LOKI_PASSWORD: ${LOKI_PASSWORD:-}
       UNIFI_URL: ${UNIFI_URL}

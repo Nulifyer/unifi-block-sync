@@ -14,6 +14,7 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	cfg, err := loadConfig()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
@@ -29,7 +30,7 @@ func main() {
 	transport.TLSClientConfig = tlsConfig
 	client := &http.Client{Transport: transport, Timeout: cfg.RequestTimeout}
 	worker := syncer{
-		source:    lokiClient{baseURL: cfg.LokiURL, query: cfg.LokiQuery, username: cfg.LokiUsername, password: cfg.LokiPassword, httpClient: client},
+		source:    lokiClient{baseURL: cfg.LokiURL, query: cfg.LokiQuery, freshnessQuery: cfg.FreshnessQuery, maxLogAge: cfg.MaxLogAge, username: cfg.LokiUsername, password: cfg.LokiPassword, httpClient: client},
 		store:     unifiClient{baseURL: cfg.UniFiURL, apiKey: cfg.UniFiAPIKey, siteID: cfg.UniFiSiteID, listID: cfg.UniFiListID, listName: cfg.UniFiListName, httpClient: client},
 		threshold: cfg.Threshold, maxEntries: cfg.MaxEntries, dryRun: cfg.DryRun, allowCIDRs: cfg.AllowCIDRs,
 	}
